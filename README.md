@@ -62,10 +62,11 @@ Ce sont les outils prévus dans les projets, pas encore tous pratiqués.
 - L'escrime
 - Les jeux de figurines
 
-Ce sont aussi les thèmes des 5 projets.
+Ces thèmes touchent à mes centres d'intérets professionel mais aussi privés.
 
 ## Contact
 
 [LinkedIn](https://www.linkedin.com/in/charles-burgy-176091321)
+[Mail](burgycharlespro@gmail.com)
 
-Si tu as des retours à me faire sur un projet, n'hésite pas.
+
