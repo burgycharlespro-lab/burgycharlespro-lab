@@ -41,7 +41,7 @@ Les guides communs (installation, choix des modèles, architecture, évaluation)
 - Le modèle à pour but de proposer (boîte noire), le code de vérifier (déterministe) : sorties validées, garde-fous, rien d'inventé.
 - Budget nul : modèles locaux avec Ollama, bibliothèques libres, licence MIT.
 - Documenter ce qui ne marche pas encore.
-- Usage de Claude, je le dis. Les cours que je suis et la structure de départ des dépôts ont été préparés avec Claude Code. Le code, les données et les mesures sont les miens.
+- Usage de d'IA générative dédié au code :  Les cours que je suis et la structure de départ des dépôts ont été préparés avec Claude Code. Le code, les données et les mesures sont les miens, le but n'est pas tant d'accumulé des projets vitrine vide de sens, mais plutôt de monter en compétence dans ma maîtrise des grands concepts.
 
 ## Outils de ces projets
 
@@ -55,7 +55,7 @@ Les guides communs (installation, choix des modèles, architecture, évaluation)
 
 Ce sont les outils prévus dans les projets, pas encore tous pratiqués.
 
-## En dehors du code
+## En dehors du code, ces projets initiaux ont été produit selon des thématiques qui m'intéresse avec comme objectif d'attribuer un rôle de professeur à Claude.
 
 - L'Alsace et ses vins
 - La mécanique des fluides, surtout les écoulements supersoniques
