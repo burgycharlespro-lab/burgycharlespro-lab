@@ -1,4 +1,4 @@
-# Charles Burgy
+# Présentation
 
 Hello, je suis élève ingénieur généraliste à Centrale Lyon, actuellement en stage marketing et IA chez ADEN Immo, à Berlin.
 
