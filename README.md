@@ -1,6 +1,6 @@
 # Présentation
 
-Hello, je suis élève ingénieur généraliste à Centrale Lyon, actuellement en stage chez ADEN Immo, à Berlin où je travaille sur l'automatisation de nombreux processus via n8n ainsi que sur l'intégration de l'IA afin de fluidifier un maximum de processus.
+Élève césuré ingénieur généraliste à Centrale Lyon, actuellement en stage chez ADEN Immo, à Berlin où je travaille sur l'automatisation de nombreux processus via n8n ainsi que sur l'intégration de l'IA afin de fluidifier un maximum de processus.
 
 En parallèle de ce stage, je me forme à l'ingénierie IA en construisant 5 projets sur mon temps libre. Mon objectif est de faire un ensemble de test pour m'approprier un ensemble de concept fondamentaux à l'usage conscient de l'IA. 
 
