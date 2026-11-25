@@ -11,9 +11,9 @@ En parallèle de ce stage, je me forme à l'ingénierie IA en construisant 5 pro
 - Chatbot construit en interne : RAG sur des guides, WhatsApp et site
 - Outillage IA de l'équipe : prompts, Claude Code, documentation
 
-## 5 projets sur lesquels je me lance
+## Mes 5 projets initiaux
 
-Dans l'ordre. Chacun réutilise ce que le précédent m'a appris.
+Dans l'ordre. Chacun est censé réutiliser ce que le précédent enseigne, puis permettre de construire de nouveaux savoir faire.
 
 | N° | Projet | Thème | Connaissance ciblée | État |
 |---|---|---|---|---|
