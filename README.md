@@ -4,7 +4,7 @@ Hello, je suis élève ingénieur généraliste à Centrale Lyon, actuellement e
 
 En parallèle de ce stage, je me forme à l'ingénierie IA en construisant 5 projets sur mon temps libre. Mon objectif est de faire un ensemble de test pour m'approprier un ensemble de concept fondamentaux à l'usage conscient de l'IA. 
 
-## Ce que je fais en stage
+## Mes missions :
 
 - SEO et GEO du site : visibilité dans Google et dans les assistants IA
 - Workflows n8n : automatisations, alertes Slack, rapports
