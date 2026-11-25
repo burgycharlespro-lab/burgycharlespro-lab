@@ -43,7 +43,7 @@ Les guides communs (installation, choix des modèles, architecture, évaluation)
 - Documenter ce qui ne marche pas encore.
 - Usage de d'IA générative dédié au code :  Les cours que je suis et la structure de départ des dépôts ont été préparés avec Claude Code. Le code, les données et les mesures sont les miens, le but n'est pas tant d'accumulé des projets vitrine vide de sens, mais plutôt de monter en compétence dans ma maîtrise des grands concepts.
 
-## Outils de ces projets
+## Outils de ces projets (prévisionel)
 
 ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 ![Ollama](https://img.shields.io/badge/Ollama-000000?logo=ollama&logoColor=white)
@@ -53,7 +53,7 @@ Les guides communs (installation, choix des modèles, architecture, évaluation)
 ![pytest](https://img.shields.io/badge/pytest-0A9EDC?logo=pytest&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white)
 
-Ce sont les outils prévus dans les projets, pas encore tous pratiqués.
+
 
 ## En dehors du code, ces projets initiaux ont été produit selon des thématiques qui m'intéresse avec comme objectif d'attribuer un rôle de professeur à Claude.
 
