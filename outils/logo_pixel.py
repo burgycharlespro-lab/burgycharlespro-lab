@@ -1,6 +1,8 @@
 """Logo de Centrale Lyon en pixel art, animé, pour le profil GitHub.
 
 Script écrit avec Claude Code (Anthropic), modèle Claude Fable 5.2, le 25/11/2026.
+Modifié le 26/11/2026 (modèle Claude Fable 5.2) : 33 images par seconde, mouvements
+adoucis, apparitions en fondu tramé.
 Le logo appartient à l'École Centrale de Lyon. Ce fichier n'en fait qu'un dessin
 en pixels pour un profil d'élève.
 
@@ -11,13 +13,13 @@ Le script écrit deux GIF dans assets/ :
     centrale-lyon-pixel-clair.gif    (texte rouge, pour le thème clair de GitHub)
     centrale-lyon-pixel-sombre.gif   (texte blanc, pour le thème sombre)
 
-Principe : chaque image est une grille de petits entiers (un entier = une couleur
-de la palette). On dessine dans cette grille à basse résolution, puis on grossit
-chaque case en un carré de ECHELLE x ECHELLE pixels.
+Principe : le logo est dessiné sur une grille de « gros pixels » (186 x 88).
+Un gros pixel vaut ECHELLE x ECHELLE pixels du GIF. Les formes restent sur la
+grille, mais elles bougent au pixel réel près : c'est ce qui rend le mouvement
+fluide. Chaque image est un tableau de petits entiers (un entier = une couleur).
 """
 
 import math
-import random
 from pathlib import Path
 
 import numpy as np
@@ -27,12 +29,12 @@ from PIL import Image
 # Réglages généraux
 # --------------------------------------------------------------------------
 
-LARGEUR, HAUTEUR = 186, 88   # taille de la grille, en « gros pixels »
+LARGEUR, HAUTEUR = 186, 88   # taille de la grille, en gros pixels
 ECHELLE = 4                  # 1 gros pixel = 4 x 4 pixels dans le GIF
-DUREE_IMAGE_MS = 80          # 80 ms par image = 12,5 images par seconde
+DUREE_IMAGE_MS = 30          # 30 ms par image = 33 images par seconde
 
 # Numéros de couleur dans la palette
-VIDE, ROUGE, BLANC, TEXTE, REFLET, REFLET_TEXTE, AILE = 0, 1, 2, 3, 4, 5, 6
+VIDE, ROUGE, BLANC, TEXTE, REFLET, REFLET_FORT, REFLET_TEXTE, AILE, OR = range(9)
 
 ROUGE_CENTRALE = (178, 33, 51)   # mesuré sur le logo fourni
 
@@ -42,18 +44,22 @@ PALETTES = {
         ROUGE: ROUGE_CENTRALE,
         BLANC: (255, 255, 255),
         TEXTE: ROUGE_CENTRALE,
-        REFLET: (236, 120, 134),
-        REFLET_TEXTE: (236, 120, 134),
+        REFLET: (226, 104, 120),         # rouge éclairci
+        REFLET_FORT: (250, 196, 203),    # cœur du reflet, presque blanc
+        REFLET_TEXTE: (226, 104, 120),
         AILE: (232, 150, 160),
+        OR: (206, 160, 72),              # la pointe qui trace, les étincelles
     },
     "sombre": {
         VIDE: (0, 0, 0),
         ROUGE: ROUGE_CENTRALE,
         BLANC: (255, 255, 255),
         TEXTE: (255, 255, 255),
-        REFLET: (236, 120, 134),
-        REFLET_TEXTE: (255, 176, 186),
+        REFLET: (226, 104, 120),
+        REFLET_FORT: (250, 196, 203),
+        REFLET_TEXTE: (255, 200, 207),
         AILE: (232, 150, 160),
+        OR: (214, 170, 84),
     },
 }
 
@@ -92,14 +98,6 @@ def construire_blason():
 FORME, CONTOUR, INTERIEUR = construire_blason()
 
 _ys, _xs = np.mgrid[0:BH, 0:BL]
-ZONE_BANDE = INTERIEUR & (_ys <= BAS_BANDE)                      # où marche le lion
-ZONE_ABEILLES = INTERIEUR & (_ys > BAS_BANDE) & (_xs < AXE)      # quart bas gauche
-ZONE_ENGRENAGES = INTERIEUR & (_ys > BAS_BANDE) & (_xs > AXE)    # quart bas droit
-# Ordre d'apparition du contour : 0 en haut au milieu, 1 à la pointe du bas
-ORDRE_CONTOUR = np.abs(np.arctan2(_xs - AXE, -(_ys - 36.0))) / math.pi
-# La case du haut du blason, d'où part le tracé du contour (ligne, colonne dans la grille).
-# Elle reste toujours allumée : voir la remarque dans ecrire_gif.
-GRAINE = (BY, BX + AXE)
 
 # --------------------------------------------------------------------------
 # Le lion (blanc sur la bande rouge). '#' = case blanche.
@@ -135,35 +133,36 @@ PATTES_A = [
     ".....###............####..####...........###.",
 ]
 
-# Pattes rapprochées : la deuxième image de la marche
-PATTES_B = [
-    ".......#######.#####.......###########.......",
-    ".........#####..####........####.####........",
-    "..........###....###........###...###........",
-    "..........##.....##.........##....##.........",
-    "..........##.....##.........##....##.........",
-    "..........###....###........###...###........",
-]
+# La queue du lion : trois positions. Chacune remplace les 10 premières
+# colonnes des lignes 9 à 12 du corps. « haute » est la pose du logo.
+QUEUES = {
+    "haute": [
+        "#......###",
+        "##....##..",
+        "..####....",
+        "..........",
+    ],
+    "milieu": [
+        ".......###",
+        "......##..",
+        "######....",
+        "..........",
+    ],
+    "basse": [
+        ".......###",
+        "......##..",
+        "...###....",
+        "###.......",
+    ],
+}
 
-# Queue baissée : remplace les 10 premières colonnes des lignes 9 à 12 du corps
-QUEUE_BASSE = [
-    ".......###",
-    "......##..",
-    "...###....",
-    "###.......",
-]
 
-
-def lion(pose="A", queue_basse=False):
-    """Renvoie (lignes du dessin, décalage vertical) pour une pose du lion."""
+def lignes_lion(queue):
+    """Renvoie le dessin complet du lion pour une position de la queue."""
     corps = list(LION_CORPS)
-    if queue_basse:
-        for i, debut in enumerate(QUEUE_BASSE):
-            corps[9 + i] = debut + corps[9 + i][10:]
-    if pose == "A":
-        return corps + PATTES_A, 0
-    # Pose B : le corps monte d'une case, les pattes s'allongent d'autant
-    return corps + [corps[-1]] + PATTES_B, -1
+    for i, debut in enumerate(QUEUES[queue]):
+        corps[9 + i] = debut + corps[9 + i][10:]
+    return corps + PATTES_A
 
 
 # --------------------------------------------------------------------------
@@ -380,12 +379,11 @@ FIN_TEXTE_X = max(x + len(LETTRES[lettre][0]) for lettre, x, _ in PLACES_LETTRES
 
 def verifier_dessins():
     """Arrête le script si un dessin a une ligne trop courte ou trop longue."""
-    for nom, lignes, largeur in [
-        ("LION_CORPS", LION_CORPS, 45), ("PATTES_A", PATTES_A, 45), ("PATTES_B", PATTES_B, 45),
-        ("QUEUE_BASSE", QUEUE_BASSE, 10),
-        ("ABEILLE_AILES_OUVERTES", ABEILLE_AILES_OUVERTES, 11),
-        ("ABEILLE_AILES_FERMEES", ABEILLE_AILES_FERMEES, 11),
-    ]:
+    dessins = [("LION_CORPS", LION_CORPS, 45), ("PATTES_A", PATTES_A, 45),
+               ("ABEILLE_AILES_OUVERTES", ABEILLE_AILES_OUVERTES, 11),
+               ("ABEILLE_AILES_FERMEES", ABEILLE_AILES_FERMEES, 11)]
+    dessins += [(f"QUEUES[{nom}]", lignes, 10) for nom, lignes in QUEUES.items()]
+    for nom, lignes, largeur in dessins:
         for i, ligne in enumerate(lignes):
             assert len(ligne) == largeur, f"{nom}, ligne {i} : {len(ligne)} cases au lieu de {largeur}"
     for lettre, lignes in LETTRES.items():
@@ -396,74 +394,164 @@ def verifier_dessins():
 
 
 # --------------------------------------------------------------------------
-# Le déroulé de l'animation (durées en nombre d'images)
+# De la grille (gros pixels) à l'image réelle (pixels du GIF)
+# --------------------------------------------------------------------------
+# Les noms qui finissent par _G désignent des tableaux à la taille réelle.
+
+G = ECHELLE
+HG, LG = HAUTEUR * G, LARGEUR * G
+YG, XG = np.mgrid[0:HG, 0:LG]        # ligne et colonne de chaque pixel réel
+
+
+def agrandir(tableau):
+    """Passe de la grille à la taille réelle : chaque case devient un carré G x G."""
+    return np.repeat(np.repeat(tableau, G, axis=0), G, axis=1)
+
+
+def sur_grille(tableau_blason, vide=False):
+    """Pose un tableau du blason (72 x 55) à sa place dans la grille entière."""
+    grille = np.full((HAUTEUR, LARGEUR), vide, dtype=tableau_blason.dtype)
+    grille[BY:BY + BH, BX:BX + BL] = tableau_blason
+    return grille
+
+
+def masque_dessin(lignes, x0, y0, signe="#"):
+    """Transforme un dessin en masque (True là où il y a le signe), dans la grille."""
+    masque = np.zeros((HAUTEUR, LARGEUR), dtype=bool)
+    for j, ligne in enumerate(lignes):
+        for i, case in enumerate(ligne):
+            if case == signe and 0 <= x0 + i < LARGEUR and 0 <= y0 + j < HAUTEUR:
+                masque[y0 + j, x0 + i] = True
+    return masque
+
+
+def decaler(masque_g, dx, dy):
+    """Déplace un masque de dx, dy pixels réels. Ce qui sort de l'image est perdu."""
+    if dx == 0 and dy == 0:
+        return masque_g
+    resultat = np.zeros_like(masque_g)
+    h, l = masque_g.shape
+    x0, x1 = max(0, -dx), min(l, l - dx)
+    y0, y1 = max(0, -dy), min(h, h - dy)
+    resultat[y0 + dy:y1 + dy, x0 + dx:x1 + dx] = masque_g[y0:y1, x0:x1]
+    return resultat
+
+
+# Trame de fondu (matrice de Bayer 4 x 4) : pour afficher une forme « à 50 % »,
+# on n'allume qu'une case sur deux, selon un motif régulier. TRAME_G donne à
+# chaque pixel un rang de 0 à 15 ; au niveau k, on montre les rangs < k.
+BAYER = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]])
+TRAME_G = BAYER[(YG // G) % 4, (XG // G) % 4]
+
+# Les zones du blason, à la taille réelle
+FORME_G = agrandir(sur_grille(FORME))
+CONTOUR_G = agrandir(sur_grille(CONTOUR))
+ZONE_BANDE_G = agrandir(sur_grille(INTERIEUR & (_ys <= BAS_BANDE)))     # bande rouge
+ZONE_BAS_G = agrandir(sur_grille(INTERIEUR & (_ys > BAS_BANDE)))        # champ blanc
+TRAIT_G = agrandir(sur_grille(INTERIEUR & (_ys > BAS_BANDE) & (_xs == AXE)))
+ZONE_ABEILLES_G = agrandir(sur_grille(INTERIEUR & (_ys > BAS_BANDE) & (_xs < AXE)))
+ZONE_ENGRENAGES = sur_grille(INTERIEUR & (_ys > BAS_BANDE) & (_xs > AXE))
+
+
+def ordre_du_contour():
+    """Donne à chaque case du contour son rang de tracé, de 0 (haut) à 1 (pointe)."""
+    angle = np.abs(np.arctan2(_xs - AXE, -(_ys - 36.0)))   # 0 en haut, pi en bas
+    rangs = np.full((BH, BL), 9.0)                          # 9 = jamais tracé
+    tries = np.sort(angle[CONTOUR])
+    rangs[CONTOUR] = np.searchsorted(tries, angle[CONTOUR], side="right") / CONTOUR.sum()
+    return rangs
+
+
+ORDRE_G = agrandir(sur_grille(ordre_du_contour(), vide=9.0))
+
+# Les dessins, transformés une fois pour toutes en masques à la taille réelle
+LION_G = {
+    queue: agrandir(masque_dessin(lignes_lion(queue), BX + LION_X, BY + LION_Y)) & ZONE_BANDE_G
+    for queue in QUEUES
+}
+ABEILLES_G = [
+    {
+        etat: (agrandir(masque_dessin(dessin, BX + ax, BY + ay, "#")),    # corps rouge
+               agrandir(masque_dessin(dessin, BX + ax, BY + ay, "o")))    # ailes roses
+        for etat, dessin in (("ouvertes", ABEILLE_AILES_OUVERTES), ("fermees", ABEILLE_AILES_FERMEES))
+    }
+    for ax, ay in ABEILLES
+]
+LETTRES_G = [agrandir(masque_dessin(LETTRES[lettre], x, y)) for lettre, x, y in PLACES_LETTRES]
+
+# --------------------------------------------------------------------------
+# Le déroulé de l'animation (durées en nombre d'images, 1 image = 30 ms)
 # --------------------------------------------------------------------------
 
-T_PAUSE = 83      # logo complet. La 1re image du GIF est donc le logo entier.
-T_EFFACE = 10     # le logo se défait case par case
-T_VIDE = 4        # il ne reste qu'une case rouge, en haut du blason
-T_CONTOUR = 14    # le contour du blason se trace
-T_REMPLI = 12     # le blason se remplit de haut en bas
-T_LION = 27       # le lion entre en marchant
-T_BAS = 22        # les abeilles arrivent, les engrenages apparaissent
-T_TEXTE = 30      # les lettres tombent une à une
-T_REFLET = 22     # un reflet traverse le logo
+T_PAUSE = 206       # logo complet. La 1re image du GIF est donc le logo entier.
+T_SORTIE = 22       # le logo s'estompe
+T_POINT = 12        # il ne reste qu'un point doré, en haut du blason
+T_CONSTRUIT = 168   # le logo se reconstruit, puis un reflet le traverse
 
-D_EFFACE = T_PAUSE
-D_VIDE = D_EFFACE + T_EFFACE
-D_CONTOUR = D_VIDE + T_VIDE
-D_REMPLI = D_CONTOUR + T_CONTOUR
-D_LION = D_REMPLI + T_REMPLI
-D_BAS = D_LION + T_LION
-D_TEXTE = D_BAS + T_BAS
-D_REFLET = D_TEXTE + T_TEXTE
-NB_IMAGES = D_REFLET + T_REFLET
+D_SORTIE = T_PAUSE
+D_POINT = D_SORTIE + T_SORTIE
+D_CONSTRUIT = D_POINT + T_POINT
+NB_IMAGES = D_CONSTRUIT + T_CONSTRUIT
 
-# Le nombre d'images doit être un multiple de 8 : les ailes et les engrenages
-# reviennent alors exactement à leur position de départ quand le GIF reboucle.
-assert NB_IMAGES % 8 == 0, f"NB_IMAGES = {NB_IMAGES}, il faut un multiple de 8"
+# Pendant la construction, chaque élément a un (début, durée), comptés en images
+# depuis le début de la construction. Les éléments se chevauchent exprès.
+C_CONTOUR = (0, 30)
+C_BANDE = (22, 24)
+C_CHAMP = (38, 26)
+C_LION = (54, 34)
+C_ENGRENAGE = (72, 24)      # + 6 images de retard par engrenage
+C_ABEILLE = (74, 18)        # + 6 images de retard par abeille
+C_LETTRE = (88, 16)         # + 3 images de retard par lettre
+C_REFLET = (126, 30)
+C_ETINCELLES = ((136, 20), (144, 20))
 
-# Tirage au sort fixe (graine 7) : l'ordre dans lequel les cases s'effacent
-_hasard = random.Random(7)
-ORDRE_EFFACEMENT = np.array(
-    [[_hasard.random() for _ in range(LARGEUR)] for _ in range(HAUTEUR)]
-)
+IMAGES_PAR_DENT = 24        # un engrenage avance d'une dent en 24 images
+
+# Les ailes (cycle de 8 images) et les engrenages doivent retrouver leur position
+# de départ quand le GIF reboucle.
+assert NB_IMAGES % 8 == 0 and NB_IMAGES % IMAGES_PAR_DENT == 0, f"NB_IMAGES = {NB_IMAGES}"
+
+
+def part(t, debut, duree):
+    """Avancement d'un élément : 0 avant son début, 1 après sa fin."""
+    return min(1.0, max(0.0, (t - debut) / duree))
+
+
+def doux(p):
+    """Démarre lentement, accélère, puis ralentit (p et le résultat entre 0 et 1)."""
+    return p * p * (3 - 2 * p)
+
+
+def freine(p):
+    """Démarre vite et se pose lentement."""
+    return 1 - (1 - p) ** 3
+
+
+def queue_du_lion(n):
+    """Pendant la pause, le lion balance deux fois la queue, lentement."""
+    positions = {"H": "haute", "M": "milieu", "B": "basse"}
+    for debut, suite in ((30, "HMBMHMBMH"), (150, "HMBMH")):
+        i = (n - debut) // 6
+        if n >= debut and i < len(suite):
+            return positions[suite[i]]
+    return "haute"
+
 
 # --------------------------------------------------------------------------
 # Outils de dessin
 # --------------------------------------------------------------------------
 
 
-def poser_dessin(grille, lignes, x0, y0, couleur, zone=None):
-    """Recopie un dessin dans la grille, à partir de (x0, y0).
+def masque_engrenage(cx, cy, rayon, dents, angle, anneau, balayage):
+    """Un engrenage dans la grille : un cercle, des dents, un anneau au centre.
 
-    '#' = case de la couleur demandée, 'o' = case rose (aile), '.' = rien.
-
-    zone : masque du blason (72 x 55). Si elle est donnée, x0 et y0 sont des
-    coordonnées dans le blason, et rien n'est dessiné hors de la zone.
+    balayage : part du tour déjà tracée (0 à 1), en partant du haut.
     """
-    for j, ligne in enumerate(lignes):
-        for i, case in enumerate(ligne):
-            if case == ".":
-                continue
-            teinte = AILE if case == "o" else couleur
-            x, y = x0 + i, y0 + j
-            if zone is not None:
-                if not (0 <= x < BL and 0 <= y < BH and zone[y, x]):
-                    continue
-                x, y = x + BX, y + BY
-            if 0 <= x < LARGEUR and 0 <= y < HAUTEUR:
-                grille[y, x] = teinte
-
-
-def poser_engrenage(grille, cx, cy, rayon, dents, angle, anneau):
-    """Dessine un engrenage : un cercle, des dents autour, un anneau au centre."""
+    masque = np.zeros((HAUTEUR, LARGEUR), dtype=bool)
     pas = 2 * math.pi / dents          # angle entre deux dents
     portee = int(rayon) + 3
     for y in range(cy - portee, cy + portee + 1):
         for x in range(cx - portee, cx + portee + 1):
-            if not (0 <= x < BL and 0 <= y < BH and ZONE_ENGRENAGES[y, x]):
-                continue
             distance = math.hypot(x - cx, y - cy)
             plein = abs(distance - rayon) <= 0.5
             if rayon + 0.5 < distance <= rayon + 1.5:
@@ -472,24 +560,38 @@ def poser_engrenage(grille, cx, cy, rayon, dents, angle, anneau):
                 plein = ecart * distance <= 0.7
             if anneau and abs(distance - anneau) <= 0.5:
                 plein = True
+            if plein and balayage < 1:
+                tour = math.atan2(x - cx, cy - y) % (2 * math.pi)   # 0 en haut
+                plein = tour <= balayage * 2 * math.pi
             if plein:
-                grille[y + BY, x + BX] = ROUGE
+                masque[BY + y, BX + x] = True
+    return masque & ZONE_ENGRENAGES
 
 
-def poser_etincelle(grille, x, y, taille):
-    """Petite croix qui grandit puis rétrécit. taille 0 = rien."""
-    if taille <= 0:
-        return
-    for d in range(-(taille - 1), taille):
-        grille[y, x + d] = ROUGE
-        grille[y + d, x] = ROUGE
-    if taille == 3:
-        grille[y, x] = VIDE
+def poser_reflet(image, position, zone_g=None):
+    """Bande de lumière en biais. Elle éclaircit le rouge et le texte qu'elle croise."""
+    d = XG + (HG - YG) * 0.5 - position            # distance au bord de la bande
+    coeur = (d >= 0) & (d < 10)
+    bord = ((d >= -8) & (d < 0)) | ((d >= 10) & (d < 18))
+    voile = (((d >= -16) & (d < -8)) | ((d >= 18) & (d < 26))) & (TRAME_G < 8)
+    filet = (d >= 36) & (d < 40)                   # second trait, plus fin
+    rouge, texte = image == ROUGE, image == TEXTE
+    if zone_g is not None:
+        rouge, texte = rouge & zone_g, texte & zone_g
+    image[rouge & (bord | voile | filet)] = REFLET
+    image[rouge & coeur] = REFLET_FORT
+    image[texte & (coeur | bord)] = REFLET_TEXTE
 
 
-def avancement(n, debut, duree):
-    """0 avant le début, 1 après la fin, entre les deux pendant."""
-    return min(1.0, max(0.0, (n - debut) / duree))
+def poser_etincelle(image, x, y, taille):
+    """Étoile dorée à quatre branches, en gros pixels. taille de 0 (rien) à 4."""
+    cases = [(0, 0)] if taille >= 1 else []
+    for d in range(1, taille):
+        cases += [(d, 0), (-d, 0), (0, d), (0, -d)]
+    if taille >= 4:
+        cases += [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+    for dx, dy in cases:
+        image[(y + dy) * G:(y + dy + 1) * G, (x + dx) * G:(x + dx + 1) * G] = OR
 
 
 # --------------------------------------------------------------------------
@@ -498,93 +600,105 @@ def avancement(n, debut, duree):
 
 
 def dessiner_image(n):
-    """Renvoie la grille (HAUTEUR x LARGEUR) de l'image numéro n."""
-    grille = np.full((HAUTEUR, LARGEUR), VIDE, dtype=np.uint8)
-    logo_complet = n < D_VIDE          # pendant la pause et l'effacement
-    if D_VIDE <= n < D_CONTOUR:
-        grille[GRAINE] = ROUGE         # une seule case : le départ du tracé
-        return grille
+    """Renvoie l'image numéro n : un tableau HG x LG de numéros de couleur."""
+    image = np.zeros((HG, LG), dtype=np.uint8)
+    graine_g = CONTOUR_G & (ORDRE_G <= 0.02)       # les cases d'où part le tracé
+    if D_POINT <= n < D_CONSTRUIT:
+        image[graine_g] = OR                       # il ne reste que le point doré
+        return image
 
-    blason = grille[BY:BY + BH, BX:BX + BL]   # une « fenêtre » sur la grille
+    fini = n < D_POINT                # pause et sortie : tout est en place
+    t = n - D_CONSTRUIT               # temps écoulé depuis le début de la construction
 
-    # 1. Contour du blason, qui se trace depuis le haut
-    trace = 1.0 if logo_complet else (n - D_CONTOUR + 1) / T_CONTOUR
-    blason[CONTOUR & (ORDRE_CONTOUR <= trace)] = ROUGE
+    def avance(debut_duree, retard=0):
+        debut, duree = debut_duree
+        return 1.0 if fini else part(t, debut + retard, duree)
 
-    # 2. Remplissage de haut en bas
-    lignes_remplies = BH if logo_complet else int(avancement(n, D_REMPLI, T_REMPLI - 1) * BH)
-    rempli = INTERIEUR & (_ys < lignes_remplies)
-    blason[rempli & (_ys <= BAS_BANDE)] = ROUGE
-    blason[rempli & (_ys > BAS_BANDE)] = BLANC
-    blason[rempli & (_ys > BAS_BANDE) & (_xs == AXE)] = ROUGE     # trait vertical
+    # 1. Le contour se trace depuis le haut, des deux côtés, derrière une pointe dorée
+    p = doux(avance(C_CONTOUR))
+    image[CONTOUR_G & (ORDRE_G <= p)] = ROUGE
+    if p < 1:
+        image[CONTOUR_G & (ORDRE_G <= max(p, 0.02)) & (ORDRE_G > p - 0.04)] = OR
 
-    # 3. Le lion
-    t = n - D_LION
-    if logo_complet or t >= 0:
-        marche = (not logo_complet) and t < 26
-        decalage = -(52 - 2 * t) if marche else 0
-        pose = "B" if marche and (t // 3) % 2 == 1 else "A"
-        if marche:
-            queue_basse = (t // 6) % 2 == 1
-        else:
-            # deux coups de queue pendant la pause
-            queue_basse = logo_complet and (24 <= n < 44 or 58 <= n < 68) and (n // 5) % 2 == 0
-        lignes, dy = lion(pose, queue_basse)
-        poser_dessin(grille, lignes, LION_X + decalage, LION_Y + dy, BLANC, zone=ZONE_BANDE)
+    # 2. La bande rouge descend, avec un liseré clair sur son bord
+    p = freine(avance(C_BANDE))
+    bord = BY * G + p * (BAS_BANDE + 1) * G
+    image[ZONE_BANDE_G & (YG < bord)] = ROUGE
+    if 0 < p < 1:
+        image[ZONE_BANDE_G & (YG < bord) & (YG >= bord - G)] = REFLET
 
-    # 4. Les abeilles : elles entrent par la gauche, puis battent des ailes sur place
-    for i, (ax, ay) in enumerate(ABEILLES):
-        depart = D_BAS - 4 + 3 * i     # elles partent un peu avant, cachées par le bord
-        if not logo_complet and n < depart:
-            continue
-        reste = 0.0 if logo_complet else (1 - avancement(n, depart, 12)) ** 2
-        ailes = ABEILLE_AILES_OUVERTES if (n // 2 + i) % 2 == 0 else ABEILLE_AILES_FERMEES
-        flotte = round(math.sin(2 * math.pi * (n / NB_IMAGES * 7 + i / 3)))   # -1, 0 ou 1
-        x = ax - round(reste * 24)
-        y = ay + flotte + round(reste * (8 if i == 2 else -4))
-        poser_dessin(grille, ailes, x, y, ROUGE, zone=ZONE_ABEILLES)
+    # 3. Le champ blanc et le trait vertical descendent à leur tour
+    p = doux(avance(C_CHAMP))
+    bord = (BY + BAS_BANDE + 1) * G + p * (BH - BAS_BANDE - 1) * G
+    image[ZONE_BAS_G & (YG < bord)] = BLANC
+    image[TRAIT_G & (YG < bord)] = ROUGE
 
-    # 5. Les engrenages : ils grossissent d'un coup, puis tournent
+    # 4. Le lion est révélé de la queue à la tête, derrière un trait de lumière
+    p = doux(avance(C_LION))
+    bord = (BX - 4) * G + p * (BL + 8) * G
+    lion_g = LION_G[queue_du_lion(n) if n < T_PAUSE else "haute"]
+    if 0 < p < 1:
+        image[ZONE_BANDE_G & (XG >= bord + 2 * G) & (XG < bord + 4 * G) & (TRAME_G < 8)] = REFLET
+        image[ZONE_BANDE_G & (XG >= bord + G) & (XG < bord + 2 * G)] = REFLET
+        image[ZONE_BANDE_G & (XG >= bord) & (XG < bord + G)] = REFLET_FORT
+    image[lion_g & (XG < bord + G)] = BLANC
+
+    # 5. Les engrenages se tracent en tournant, puis continuent de tourner lentement
     for i, (cx, cy, rayon, dents, sens, anneau) in enumerate(ENGRENAGES):
-        t = n - (D_BAS + 4 + 4 * i)
-        if not logo_complet and t < 0:
+        p = freine(avance(C_ENGRENAGE, retard=6 * i))
+        if p <= 0:
             continue
-        grossissement = 1.0 if logo_complet or t >= 3 else (0.45, 0.8, 1.15)[t]
-        # une dent avance d'un cran toutes les 8 images
-        angle = sens * (2 * math.pi / dents) * (n / 8) + (math.pi / dents if sens < 0 else 0)
-        poser_engrenage(grille, cx, cy, rayon * grossissement, dents, angle,
-                        anneau if grossissement == 1.0 else 0)
+        angle = sens * (2 * math.pi / dents) * (n / IMAGES_PAR_DENT)
+        if sens < 0:
+            angle += math.pi / dents
+        image[agrandir(masque_engrenage(cx, cy, rayon, dents, angle, anneau, p))] = ROUGE
 
-    # 6. Les lettres : chacune tombe, dépasse d'une case, puis se pose
-    chute = (-6, -3, -1, 1, 0)
-    for i, (lettre, x, y) in enumerate(PLACES_LETTRES):
-        t = n - (D_TEXTE + 2 * i)
-        if not logo_complet and t < 0:
+    # 6. Les abeilles apparaissent en fondu, en montant, puis flottent sur place
+    for i, etats in enumerate(ABEILLES_G):
+        p = freine(avance(C_ABEILLE, retard=6 * i))
+        if p <= 0:
             continue
-        dy = 0 if logo_complet or t >= len(chute) else chute[t]
-        poser_dessin(grille, LETTRES[lettre], x, y + dy, TEXTE)
+        flotte = round(2 * math.sin(2 * math.pi * (5 * n / NB_IMAGES + i / 3)))   # -2 à 2 pixels
+        dy = round((1 - p) * 10) + flotte
+        corps_g, ailes_g = etats["ouvertes" if (n // 4 + i) % 2 == 0 else "fermees"]
+        visible = ZONE_ABEILLES_G & (TRAME_G < round(p * 16))
+        image[decaler(ailes_g, 0, dy) & visible] = AILE
+        image[decaler(corps_g, 0, dy) & visible] = ROUGE
 
-    # 7. Le reflet : deux bandes en biais qui traversent de gauche à droite
-    if n >= D_REFLET:
-        t = n - D_REFLET
-        ys, xs = np.mgrid[0:HAUTEUR, 0:LARGEUR]
-        position = xs + (HAUTEUR - ys) * 0.5 - (-24 + 13 * t)
-        bande = ((position >= 0) & (position < 6)) | ((position >= 9) & (position < 11))
-        grille[bande & (grille == ROUGE)] = REFLET
-        grille[bande & (grille == TEXTE)] = REFLET_TEXTE
-        # deux étincelles à la fin du reflet
-        tailles = (1, 2, 3, 3, 2, 1)
-        for retard, (ex, ey) in ((10, (BX + BL + 3, BY + 2)), (14, (FIN_TEXTE_X + 3, TEXTE_Y - 5))):
-            if 0 <= t - retard < len(tailles):
-                poser_etincelle(grille, ex, ey, tailles[t - retard])
+    # 7. Les lettres montent une à une en fondu et se posent en douceur
+    for i, lettre_g in enumerate(LETTRES_G):
+        p = avance(C_LETTRE, retard=3 * i)
+        if p <= 0:
+            continue
+        dy = round((1 - freine(p)) * 14)
+        niveau = round(min(1.0, p / 0.6) * 16)
+        image[decaler(lettre_g, 0, dy) & (TRAME_G < niveau)] = TEXTE
 
-    # 8. L'effacement : de plus en plus de cases disparaissent, au hasard
-    if D_EFFACE <= n < D_VIDE:
-        part_effacee = (n - D_EFFACE + 1) / T_EFFACE
-        grille[ORDRE_EFFACEMENT < part_effacee] = VIDE
-        grille[GRAINE] = ROUGE
+    # 8. Fin de la construction : un reflet traverse tout le logo, puis deux étincelles
+    if not fini:
+        p = part(t, *C_REFLET)
+        if 0 < p < 1:
+            poser_reflet(image, -60 + doux(p) * (LG + HG / 2 + 120))
+        coins = ((BX + BL + 3, BY + 2), (FIN_TEXTE_X + 3, TEXTE_Y - 5))
+        for (debut, duree), (x, y) in zip(C_ETINCELLES, coins):
+            p = part(t, debut, duree)
+            if 0 < p < 1:
+                poser_etincelle(image, x, y, round(math.sin(math.pi * p) * 4))
 
-    return grille
+    # 9. Au milieu de la pause : un reflet discret, sur le blason seulement
+    if n < T_PAUSE:
+        p = part(n, 96, 28)
+        if 0 < p < 1:
+            poser_reflet(image, -30 + doux(p) * 500, zone_g=FORME_G)
+
+    # 10. La sortie : le logo s'estompe en fondu tramé, il reste le point doré
+    if D_SORTIE <= n < D_POINT:
+        p = (n - D_SORTIE + 1) / T_SORTIE
+        niveau = round((1 - doux(p)) * 16)
+        image[TRAME_G >= niveau] = VIDE
+        image[graine_g] = OR if niveau <= 4 else ROUGE
+
+    return image
 
 
 # --------------------------------------------------------------------------
@@ -592,55 +706,59 @@ def dessiner_image(n):
 # --------------------------------------------------------------------------
 
 
-def grille_vers_image(grille, palette):
-    """Grossit la grille et la transforme en image à palette."""
-    grande = np.repeat(np.repeat(grille, ECHELLE, axis=0), ECHELLE, axis=1)
-    image = Image.fromarray(grande, mode="P")
+def vers_image_pillow(image, palette):
+    """Transforme le tableau de numéros de couleur en image à palette."""
+    resultat = Image.frombytes("P", (LG, HG), image.tobytes())
     couleurs = []
     for numero in range(len(palette)):
         couleurs.extend(palette[numero])
-    image.putpalette(couleurs)
-    return image
+    resultat.putpalette(couleurs)
+    return resultat
 
 
-def ecrire_gif(chemin, palette):
-    """Écrit le GIF et renvoie le nombre d'images réellement enregistrées."""
-    # Deux images de suite identiques : on n'en garde qu'une, affichée plus longtemps.
-    grilles, durees = [], []
+def toutes_les_images():
+    """Calcule l'animation une fois. Renvoie (images, durées en millisecondes).
+
+    Deux images de suite identiques : on n'en garde qu'une, affichée plus longtemps.
+    """
+    images, durees = [], []
     for n in range(NB_IMAGES):
-        grille = dessiner_image(n)
+        image = dessiner_image(n)
         # Pillow écrit un fichier abîmé si une image est entièrement transparente
         # (constaté le 26/11/2026 avec Pillow 12.3.0). On l'interdit donc ici.
-        assert (grille != VIDE).any(), f"image {n} entièrement vide"
-        if grilles and np.array_equal(grille, grilles[-1]):
+        assert (image != VIDE).any(), f"image {n} entièrement vide"
+        if images and np.array_equal(image, images[-1]):
             durees[-1] += DUREE_IMAGE_MS
         else:
-            grilles.append(grille)
+            images.append(image)
             durees.append(DUREE_IMAGE_MS)
+    return images, durees
 
-    images = [grille_vers_image(grille, palette) for grille in grilles]
-    images[0].save(
+
+def ecrire_gif(chemin, images, durees, palette):
+    pages = [vers_image_pillow(image, palette) for image in images]
+    pages[0].save(
         chemin,
         save_all=True,
-        append_images=images[1:],
+        append_images=pages[1:],
         duration=durees,     # une durée par image, en millisecondes
         loop=0,              # 0 = boucle sans fin
         transparency=VIDE,   # la couleur n° 0 est transparente
         disposal=2,          # on efface l'image avant de dessiner la suivante
         optimize=False,
     )
-    return len(images)
 
 
 def main():
     verifier_dessins()
     dossier = Path(__file__).resolve().parent.parent / "assets"
     dossier.mkdir(exist_ok=True)
+    images, durees = toutes_les_images()
     for nom, palette in PALETTES.items():
         chemin = dossier / f"centrale-lyon-pixel-{nom}.gif"
-        nb = ecrire_gif(chemin, palette)
-        duree_s = NB_IMAGES * DUREE_IMAGE_MS / 1000
-        print(f"{chemin.name} : {nb} images, {duree_s:.1f} s, {chemin.stat().st_size / 1024:.0f} Ko")
+        ecrire_gif(chemin, images, durees, palette)
+        print(f"{chemin.name} : {len(images)} images, {sum(durees) / 1000:.2f} s, "
+              f"{chemin.stat().st_size / 1024:.0f} Ko")
 
 
 if __name__ == "__main__":
