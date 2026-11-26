@@ -2,7 +2,7 @@
 
 Script écrit avec Claude Code (Anthropic), modèle Claude Fable 5.2, le 25/11/2026.
 Modifié le 26/11/2026 (modèle Claude Fable 5.2) : 33 images par seconde, mouvements
-adoucis, apparitions en fondu tramé.
+adoucis, apparitions en fondu tramé, lettres animées en continu par une vague.
 Le logo appartient à l'École Centrale de Lyon. Ce fichier n'en fait qu'un dessin
 en pixels pour un profil d'élève.
 
@@ -507,6 +507,11 @@ C_ETINCELLES = ((136, 20), (144, 20))
 
 IMAGES_PAR_DENT = 24        # un engrenage avance d'une dent en 24 images
 
+# La vague qui anime les lettres en continu
+VAGUES_PAR_BOUCLE = 6       # nombre entier : la vague se raccorde quand le GIF reboucle
+AMPLITUDE_VAGUE = 3         # en pixels réels (moins d'un gros pixel : reste discret)
+LONGUEUR_VAGUE = 90         # en gros pixels : distance entre deux crêtes
+
 # Les ailes (cycle de 8 images) et les engrenages doivent retrouver leur position
 # de départ quand le GIF reboucle.
 assert NB_IMAGES % 8 == 0 and NB_IMAGES % IMAGES_PAR_DENT == 0, f"NB_IMAGES = {NB_IMAGES}"
@@ -665,12 +670,18 @@ def dessiner_image(n):
         image[decaler(ailes_g, 0, dy) & visible] = AILE
         image[decaler(corps_g, 0, dy) & visible] = ROUGE
 
-    # 7. Les lettres montent une à une en fondu et se posent en douceur
+    # 7. Les lettres montent une à une en fondu et se posent en douceur.
+    #    Une fois posées, elles ne s'arrêtent pas : une vague lente les soulève
+    #    l'une après l'autre, de gauche à droite.
     for i, lettre_g in enumerate(LETTRES_G):
         p = avance(C_LETTRE, retard=3 * i)
         if p <= 0:
             continue
-        dy = round((1 - freine(p)) * 14)
+        pose = freine(p)                              # 0 = en route, 1 = posée
+        x_lettre = PLACES_LETTRES[i][1]
+        phase = VAGUES_PAR_BOUCLE * n / NB_IMAGES - x_lettre / LONGUEUR_VAGUE
+        vague = round(pose * AMPLITUDE_VAGUE * math.sin(2 * math.pi * phase))
+        dy = round((1 - pose) * 14) + vague
         niveau = round(min(1.0, p / 0.6) * 16)
         image[decaler(lettre_g, 0, dy) & (TRAME_G < niveau)] = TEXTE
 
@@ -685,11 +696,11 @@ def dessiner_image(n):
             if 0 < p < 1:
                 poser_etincelle(image, x, y, round(math.sin(math.pi * p) * 4))
 
-    # 9. Au milieu de la pause : un reflet discret, sur le blason seulement
+    # 9. Au milieu de la pause : le reflet repasse sur le blason et sur les lettres
     if n < T_PAUSE:
-        p = part(n, 96, 28)
+        p = part(n, 90, 40)
         if 0 < p < 1:
-            poser_reflet(image, -30 + doux(p) * 500, zone_g=FORME_G)
+            poser_reflet(image, -60 + doux(p) * (LG + HG / 2 + 120))
 
     # 10. La sortie : le logo s'estompe en fondu tramé, il reste le point doré
     if D_SORTIE <= n < D_POINT:
